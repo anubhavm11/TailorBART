@@ -23,6 +23,7 @@ libgcc-ng=9.1.0=hdf63c60_0
 libstdcxx-ng=9.1.0=hdf63c60_0
 markupsafe=1.1.1=pypi_0
 ncurses=6.2=he6710b0_1
+nltk=3.5=pypi_0
 openssl=1.1.1h=h7b6447c_0
 pexpect=4.8.0=pypi_0
 pip=20.2.4=py38h06a4308_0

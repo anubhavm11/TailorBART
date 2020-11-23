@@ -3,6 +3,8 @@ import numpy as np
 import torch
 from transformers import BartTokenizer, BartForConditionalGeneration
 import re
+import nltk
+nltk.download('punkt')
 
 MODEL_NAME = 'sshleifer/distilbart-cnn-6-6'
 num_length_bins = 10
@@ -83,7 +85,7 @@ if st.button('Submit'):
 	st.out = compute_summary(input_text,length_bin)
 	# st.out = compute_summary_length(input_text,length_bin)
 
-	st.out_len = "*Number of words* = "+str(len(re.findall(r'\w+',st.out)))
+	st.out_len = "*Number of words* = "+str(len(nltk.word_tokenize(st.out)))
 
 st.write("")
 st.markdown("**Output Summary**")
