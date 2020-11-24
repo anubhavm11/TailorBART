@@ -125,7 +125,7 @@ class BARTSummarization(LightningModule):
 
 
 class TorchDataset(torch.utils.data.Dataset):
-    def __init__(self, articles, highlights, length_tokens, tokenizer, max_length=512): ####
+    def __init__(self, articles, highlights, tokenizer, length_tokens=None, max_length=512): ####
         self.x = articles
         self.y = highlights
         self.length_tokens = length_tokens
@@ -134,15 +134,19 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         x = self.tokenizer.encode_plus(self.x[index].lower(), max_length=self.max_length-1, return_tensors="pt", truncation=True, padding='max_length')
-        x_input_ids = torch.cat((torch.tensor([self.length_tokens[index]]), x['input_ids'].view(-1)), dim=0)
-        x_attention_mask = torch.cat((torch.tensor([1]), x['attention_mask'].view(-1)), dim=0)
+        if self.length_tokens==None:
+            x_input_ids = x['input_ids'].view(-1)
+            x_attention_mask = x['attention_mask'].view(-1)
+        else:
+            x_input_ids = torch.cat((torch.tensor([self.length_tokens[index]]), x['input_ids'].view(-1)), dim=0)
+            x_attention_mask = torch.cat((torch.tensor([1]), x['attention_mask'].view(-1)), dim=0)
         y = self.tokenizer.encode(self.y[index].lower(), max_length=self.max_length, return_tensors="pt", truncation=True, padding='max_length')
         return {'input_ids' : x_input_ids, 'attention_mask' : x_attention_mask, 'tgt_ids' : y.view(-1)}
 
     def __len__(self):
         return len(self.x)
 
-def read_data(file_path, split):
+def read_data(file_path, split, limit=-1):
 
     articles_path = os.path.join(file_path, split + '_articles.txt')
     highlights_path = os.path.join(file_path, split + '_highlights.txt')
@@ -157,7 +161,9 @@ def read_data(file_path, split):
             highlights.append(l.strip())
     assert len(articles)==len(highlights)
 
-    return articles[:20000], highlights[:20000] ####
+    if(limit==-1):
+        return articles, highlights
+    return articles[:limit], highlights[:limit]
 
 def find_length_tokens(summary, bin_l, tokenizer):
     tokens = []
@@ -187,48 +193,60 @@ def find_length_control_bins(train_summary):
 
 
 def main():
-
+    FINETUNE_LENGTH = False
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #DATA_PATH = "/content/drive/My Drive/CNN_DailyMail_Processed"
     #DATA_PATH = "/Users/apple/Downloads/CNN_DailyMail_Processed"
     DATA_PATH = "/home/aakash03/CNN_DailyMail_Processed"
 
-    train_articles, train_hightlights = read_data(DATA_PATH, 'train')
-    val_articles, val_hightlights = read_data(DATA_PATH, 'val')
-    test_articles, test_hightlights = read_data(DATA_PATH, 'test')
+    train_articles, train_hightlights = read_data(DATA_PATH, 'train', -1) ####
+    val_articles, val_hightlights = read_data(DATA_PATH, 'val', 20)
+    test_articles, test_hightlights = read_data(DATA_PATH, 'test', 20)
 
-    MODEL_NAME = 'sshleifer/distilbart-cnn-6-6' ####
+    ####MODEL_NAME = 'sshleifer/distilbart-cnn-6-6' ####
+    MODEL_NAME = 'facebook/bart-base'
     BATCH_SIZE = 4
-    MAX_EPOCHS = 5
+    MAX_EPOCHS = 500
     tokenizer = BartTokenizer.from_pretrained(MODEL_NAME)
-    length_tokens = [f'<bin_{idx}>' for idx in range(10)]
-    tokenizer.add_tokens(length_tokens)
+    checkpoint_dir = None
+    if FINETUNE_LENGTH:
+        checkpoint_dir = 'checkpoint_dir'
+        length_tokens = [f'<bin_{idx}>' for idx in range(10)]
+        tokenizer.add_tokens(length_tokens)
 
-    bin_l = find_length_control_bins(train_hightlights)
-    train_length_token_list = find_length_tokens(train_hightlights, bin_l, tokenizer)
-    print(bin_l)
-    val_length_token_list = find_length_tokens(val_hightlights, bin_l, tokenizer)
-    test_length_token_list = find_length_tokens(test_hightlights, bin_l, tokenizer)
+        ####bin_l = find_length_control_bins(train_hightlights)
+        bin_l = [0, 33, 38, 42, 47, 51, 56, 61, 68, 81]
+        train_length_token_list = find_length_tokens(train_hightlights, bin_l, tokenizer)
+        val_length_token_list = find_length_tokens(val_hightlights, bin_l, tokenizer)
+        test_length_token_list = find_length_tokens(test_hightlights, bin_l, tokenizer)
 
 
-    train_ds = TorchDataset(train_articles, train_hightlights, train_length_token_list, tokenizer)
-    val_ds = TorchDataset(val_articles, val_hightlights, val_length_token_list, tokenizer)
-    test_ds = TorchDataset(test_articles, test_hightlights, test_length_token_list, tokenizer)
+        train_ds = TorchDataset(train_articles, train_hightlights, tokenizer, train_length_token_list)
+        val_ds = TorchDataset(val_articles, val_hightlights, tokenizer, val_length_token_list)
+        test_ds = TorchDataset(test_articles, test_hightlights, tokenizer, test_length_token_list)
+    
+    else:
+        checkpoint_dir = 'checkpoint_dir_normal'
+        train_ds = TorchDataset(train_articles, train_hightlights, tokenizer)
+        val_ds = TorchDataset(val_articles, val_hightlights, tokenizer)
+        test_ds = TorchDataset(test_articles, test_hightlights, tokenizer)
 
-    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=8)
-    val_loader = torch.utils.data.DataLoader(val_ds, batch_size=BATCH_SIZE, num_workers=8)
-    test_loader = torch.utils.data.DataLoader(test_ds, batch_size=BATCH_SIZE, num_workers=8)
+
+    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=BATCH_SIZE, num_workers=8, shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_ds, batch_size=BATCH_SIZE, num_workers=8, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_ds, batch_size=BATCH_SIZE, num_workers=8, shuffle=True)
 
     logger = pl.loggers.TensorBoardLogger('tb_logs', name='BARTSummarization')
     summarization_model = BARTSummarization(MODEL_NAME, tokenizer)
     checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoint_dir',
+        dirpath=checkpoint_dir,
         save_top_k=-1,
         verbose=True,
         monitor='avg_val_loss',
+        filename='{epoch:02d}-{avg_val_loss:.2f}',
         mode='min'
     )
-    trainer = pl.Trainer(max_epochs=MAX_EPOCHS, logger=logger, gpus=1, callbacks=[checkpoint_callback])
+    trainer = pl.Trainer(max_epochs=MAX_EPOCHS, logger=logger, gpus=1, accumulate_grad_batches=4, callbacks=[checkpoint_callback], limit_train_batches=0.1)
     trainer.fit(summarization_model, train_loader, val_loader)
 
     model = summarization_model.model
