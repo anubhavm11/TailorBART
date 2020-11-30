@@ -1,0 +1,40 @@
+.highlight {
+  border-radius: 0.4rem;
+  color: white;
+  padding: 0.3rem;
+  margin-bottom: 1rem;
+}
+.bold {
+  padding-left: 1rem;
+  font-weight: 700;
+}
+.color0 {
+  background-color: deepskyblue;
+}
+.color1 {
+  background-color: lawngreen;
+}
+.color2 {
+  background-color: chartreuse;
+}
+.color3 {
+  background-color: gold;
+}
+.color4 {
+  background-color: lightblue;
+}
+.color5 {
+  background-color: lightsalmon;
+}
+.color6 {
+  background-color: lightgrey;
+}
+.color7 {
+  background-color: navy;
+}
+.color8 {
+  background-color: plum;
+}
+.color9 {
+  background-color: midnightblue;
+}
