@@ -78,6 +78,21 @@ if not hasattr(st, 'model3'):
 if not hasattr(st, 'nlp'):
 	st.nlp = spacy.load("en_core_web_sm")
 
+def _max_width_():
+	max_width_str = f"max-width: 70%;"
+	st.markdown(
+		f"""
+	<style>
+	.reportview-container .main .block-container{{
+		{max_width_str}
+	}}
+	</style>    
+	""",
+		unsafe_allow_html=True,
+	)
+
+_max_width_()
+
 def replace(old_phrase, new_phrase, sentence):
 	old_phrase_cp = re.escape(old_phrase)
 	old_phrase_cp = "((?<=[^a-zA-Z0-9])|(?<=^))" + old_phrase_cp + "((?=[^a-zA-Z0-9])|(?=$))"
