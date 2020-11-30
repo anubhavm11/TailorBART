@@ -7,7 +7,9 @@ import re
 import nltk
 import spacy
 from collections import Counter
+from load_css import local_css
 
+local_css("style.css")
 MODEL_NAME = 'facebook/bart-base'
 num_length_bins = 10
 num_entities = 10
@@ -131,32 +133,46 @@ def compute_output(x, model, eval_beams = 4):
 
 def compute_summary(input_text, length_bin = None , entity_token = None, eval_beams=4):
 	output = None
+	out_len = 0
 	if (not length_bin) and (not entity_token):
 		x = st.model0.tokenizer.encode_plus(input_text.lower(), max_length=512, return_tensors="pt", truncation=True, padding='max_length')
 		output = compute_output(x, st.model0, eval_beams)
+		output = output.replace("<s>","")
+		output = output.replace("</s>","")
+		out_len = len(nltk.word_tokenize(output))
 
 	elif length_bin and (not entity_token):
 		x = encode_text_len(input_text, f'<bin_{length_bin-1}>')
 		output = compute_output(x, st.model1, eval_beams)
+		output = output.replace("<s>","")
+		output = output.replace("</s>","")
+		out_len = len(nltk.word_tokenize(output))
 		
 	elif (not length_bin) and (entity_token):
 		x = encode_text_ent(input_text)
 		output = compute_output(x, st.model2, eval_beams)
-		#print(output)
+		output = output.replace("<s>","")
+		output = output.replace("</s>","")
+		output_cp = str(output)
 		for key, value in st.entity_dict.items():
-			output = output.replace(value, '**'+key+'**')
-		#print(output)
+			output_cp = output_cp.replace(value, key)
+			output = output.replace(value, f"<span class='highlight color{value[-1]}'>"+key+"</span>")
+		out_len = len(nltk.word_tokenize(output_cp))
+		output = "<div>"+output+"</div>"
 	
 	else:
 		x = encode_text_both(input_text, f'<bin_{length_bin-1}>')
 		output = compute_output(x, st.model3, eval_beams)
-		#print(output)
+		output = output.replace("<s>","")
+		output = output.replace("</s>","")
+		output_cp = str(output)
 		for key, value in st.entity_dict.items():
-			output = output.replace(value, '**'+key+'**')
+			output_cp = output_cp.replace(value, key)
+			output = output.replace(value, f"<span class='highlight color{value[-1]}'>"+key+"</span>")
+		out_len = len(nltk.word_tokenize(output_cp))
+		output = "<div>"+output+"</div>"
 
-	output = output.replace("<s>","")
-	output = output.replace("</s>","")
-	return output, len(nltk.word_tokenize(output))
+	return output, out_len
 	
 def get_entity_list(article):
 	allowed_entitylabels = ["PERSON", "GPE", "ORG", "WORK_OF_ART", "GEO", "NORP", "EVENT"]
@@ -248,6 +264,5 @@ elif cur_state == 'Length and Entity control':
 
 st.write("")
 st.markdown("**Output Summary**")
-st.markdown(st.out)
+st.markdown(st.out, unsafe_allow_html=True)
 st.markdown(st.out_len)
-
