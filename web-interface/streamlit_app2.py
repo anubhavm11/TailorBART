@@ -5,7 +5,7 @@ from transformers import BartTokenizer
 from model.finetune_bart_model import BARTSummarization
 import re
 import nltk
-import en_core_web_lg
+import spacy
 from collections import Counter
 
 MODEL_NAME = 'facebook/bart-base'
@@ -13,8 +13,8 @@ num_length_bins = 10
 num_entities = 10
 max_length = 512
 CHECKPOINT_PATH_0 = 'ckpt/base_model_latest.ckpt'
-CHECKPOINT_PATH_1 = 'ckpt/epoch=11-avg_val_loss=1.79.ckpt'
-CHECKPOINT_PATH_2 = 'ckpt/epoch=07-avg_val_loss=1.77.ckpt'
+CHECKPOINT_PATH_1 = 'ckpt/length.ckpt'
+CHECKPOINT_PATH_2 = 'ckpt/entity.ckpt'
 CHECKPOINT_PATH_3 = 'ckpt/length_entity.ckpt'
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -74,7 +74,7 @@ if not hasattr(st, 'model3'):
 	st.model3.to(DEVICE)
 
 if not hasattr(st, 'nlp'):
-	st.nlp = en_core_web_lg.load()
+	st.nlp = spacy.load("en_core_web_sm")
 
 def replace(old_phrase, new_phrase, sentence):
 	old_phrase_cp = re.escape(old_phrase)
@@ -88,25 +88,28 @@ def encode_text_len(input_text, length_bin):
 	return {"input_ids": x_input_ids.view(1, -1), "attention_mask": x_attention_mask.view(1, -1)}
 
 def encode_text_ent(input_text):
-	input_text_cp = str(input_text)
+	input_text_cp = str(input_text.lower())
 	for key, value in st.entity_dict.items():
 		input_text_cp = replace(key, value, input_text_cp)
 
-	x = st.model2.tokenizer.encode_plus(input_text_cp.lower(), max_length=512-1, return_tensors="pt", truncation=True, padding='max_length')
-	x_input_ids = torch.cat((torch.tensor([st.model2.tokenizer.convert_tokens_to_ids(st.entity_dict[st.entity])]), x['input_ids'].view(-1)), dim=0)
-	x_attention_mask = torch.cat((torch.tensor([1]), x['attention_mask'].view(-1)), dim=0)
+	input_text_cp = ' '.join([st.entity_dict[item] for item in st.entity]) + ' ' + input_text_cp
+
+	x = st.model2.tokenizer.encode_plus(input_text_cp, max_length=512-1, return_tensors="pt", truncation=True, padding='max_length')
+	#x_input_ids = torch.cat((torch.tensor([st.model2.tokenizer.convert_tokens_to_ids(st.entity_dict[st.entity])]), x['input_ids'].view(-1)), dim=0)
+	#x_attention_mask = torch.cat((torch.tensor([1]), x['attention_mask'].view(-1)), dim=0)
 	#print(x_input_ids)
 	#print(st.entity)
-	return {"input_ids": x_input_ids.view(1, -1), "attention_mask": x_attention_mask.view(1, -1)}
+	return {"input_ids": x['input_ids'].view(1, -1), "attention_mask": x['attention_mask'].view(1, -1)}
 
 def encode_text_both(input_text, length_bin):
-	input_text_cp = str(input_text)
+	input_text_cp = str(input_text.lower())
 	for key, value in st.entity_dict.items():
 		input_text_cp = replace(key, value, input_text_cp)
+	input_text_cp = ' '.join([st.entity_dict[item] for item in st.entity])  + ' ' + input_text_cp
 
-	x = st.model3.tokenizer.encode_plus(input_text_cp.lower(), max_length=512-2, return_tensors="pt", truncation=True, padding='max_length')
-	x_input_ids = torch.cat((torch.tensor([st.model3.tokenizer.convert_tokens_to_ids(length_bin), st.model3.tokenizer.convert_tokens_to_ids(st.entity_dict[st.entity])]), x['input_ids'].view(-1)), dim=0)
-	x_attention_mask = torch.cat((torch.tensor([1, 1]), x['attention_mask'].view(-1)), dim=0)
+	x = st.model3.tokenizer.encode_plus(input_text_cp, max_length=512-1, return_tensors="pt", truncation=True, padding='max_length')
+	x_input_ids = torch.cat((torch.tensor([st.model3.tokenizer.convert_tokens_to_ids(length_bin)]), x['input_ids'].view(-1)), dim=0)
+	x_attention_mask = torch.cat((torch.tensor([1]), x['attention_mask'].view(-1)), dim=0)
 	return {"input_ids": x_input_ids.view(1, -1), "attention_mask": x_attention_mask.view(1, -1)}
 
 def compute_output(x, model, eval_beams = 4):
@@ -141,7 +144,7 @@ def compute_summary(input_text, length_bin = None , entity_token = None, eval_be
 		output = compute_output(x, st.model2, eval_beams)
 		#print(output)
 		for key, value in st.entity_dict.items():
-			output = output.replace(value, key)
+			output = output.replace(value, '**'+key+'**')
 		#print(output)
 	
 	else:
@@ -149,7 +152,7 @@ def compute_summary(input_text, length_bin = None , entity_token = None, eval_be
 		output = compute_output(x, st.model3, eval_beams)
 		#print(output)
 		for key, value in st.entity_dict.items():
-			output = output.replace(value, key)
+			output = output.replace(value, '**'+key+'**')
 
 	output = output.replace("<s>","")
 	output = output.replace("</s>","")
@@ -162,7 +165,7 @@ def get_entity_list(article):
 	entities_freq = Counter(entities).most_common(num_entities)
 	entities_limited = []
 	for entity_tuple in entities_freq:
-		entities_limited.append(entity_tuple[0])
+		entities_limited.append(entity_tuple[0].lower())
 
 	final_entities = set()
 	anon_dict = dict()
@@ -173,10 +176,10 @@ def get_entity_list(article):
 		index +=1
 	return anon_dict
 
-st.title('Controlled summarization using BART')
+st.title('Controlled summarization using TailorBART')
 
 cur_state = st.radio("Choose control", ('No control','Length control', 'Entity control', 'Length and Entity control'))
-st.markdown('Enter a **String input** and select **Length** to see what **output summary** the BART summarizer gives.')
+st.markdown('Enter a **String input** and select **Control** to see what **output summary** the TailorBART summarizer gives.')
 
 sample_text = "Ever noticed how plane seats appear to be getting smaller and smaller? With increasing numbers of people taking to the skies, some experts are questioning if having such packed out planes is putting passengers at risk. They say that the shrinking space on aeroplanes is not only uncomfortable - it's putting our health and safety in danger. More than squabbling over the arm rest, shrinking space on planes putting our health and safety in danger? This week, a U.S consumer advisory group set up by the Department of Transportation said at a public hearing that while the government is happy to set standards for animals flying on planes, it doesn't stipulate a minimum amount of space for humans. 'In a world where animals have more rights to space and food than humans,' said Charlie Leocha, consumer representative on the committee. 'It is time that the DOT and FAA take a stand for humane treatment of passengers.' But could crowding on planes lead to more serious issues than fighting for space in the overhead lockers, crashing elbows and seat back kicking? Tests conducted by the FAA use planes with a 31 inch pitch, a standard which on some airlines has decreased . Many economy seats on United Airlines have 30 inches of room, while some airlines offer as little as 28 inches . Cynthia Corbertt, a human factors researcher with the Federal Aviation Administration, that it conducts tests on how quickly passengers can leave a plane. But these tests are conducted using planes with 31 inches between each row of seats, a standard which on some airlines has decreased, reported the Detroit News. The distance between two seats from one point on a seat to the same point on the seat behind it is known as the pitch. While most airlines stick to a pitch of 31 inches or above, some fall below this. While United Airlines has 30 inches of space, Gulf Air economy seats have between 29 and 32 inches, Air Asia offers 29 inches and Spirit Airlines offers just 28 inches. British Airways has a seat pitch of 31 inches, while easyJet has 29 inches, Thomson's short haul seat pitch is 28 inches, and Virgin Atlantic's is 30-31."
 
@@ -212,11 +215,12 @@ elif cur_state == 'Entity control':
 		st.out_len = ''
 
 	if st.entity_dict:
-		st.entity = st.radio("Choose entity:", [key for key, value in st.entity_dict.items()])
+		st.entity = st.multiselect("Choose entity:", [key for key, value in st.entity_dict.items()])
+
 
 	if st.entity_dict and st.button('Submit'):
 		if st.cur_text == input_text:
-			st.out, out_len = compute_summary(input_text, entity_token = st.entity_dict[st.entity])
+			st.out, out_len = compute_summary(input_text, entity_token = [st.entity_dict[entity] for entity in st.entity])
 			#st.out = st.out.replace(st.entity, "**"+st.entity+"**")
 			st.out_len = "*Number of words* = "+str(out_len)
 		else:
@@ -232,11 +236,11 @@ elif cur_state == 'Length and Entity control':
 		st.out_len = ''
 
 	if st.entity_dict:
-		st.entity = st.radio("Choose entity:", [key for key, value in st.entity_dict.items()])
+		st.entity = st.multiselect("Choose entity:", [key for key, value in st.entity_dict.items()])
 
 	if st.entity_dict and st.button('Submit'):
 		if st.cur_text == input_text:
-			st.out, out_len = compute_summary(input_text, length_bin = length_bin, entity_token = st.entity_dict[st.entity])
+			st.out, out_len = compute_summary(input_text, length_bin = length_bin, entity_token = [st.entity_dict[entity] for entity in st.entity])
 			#st.out = st.out.replace(st.entity, "**"+st.entity+"**")
 			st.out_len = "*Number of words* = "+str(out_len)
 		else:
@@ -246,3 +250,4 @@ st.write("")
 st.markdown("**Output Summary**")
 st.markdown(st.out)
 st.markdown(st.out_len)
+
