@@ -134,6 +134,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         x = self.tokenizer.encode_plus(self.x[index].lower(), max_length=self.max_length-1, return_tensors="pt", truncation=True, padding='max_length')
+        #print(x['input_ids'].view(-1)[:5])
         if self.length_tokens==None:
             x_input_ids = x['input_ids'].view(-1)
             x_attention_mask = x['attention_mask'].view(-1)
@@ -159,6 +160,7 @@ def read_data(file_path, split, limit=-1):
     with open(highlights_path, 'r') as f:
         for l in f:
             highlights.append(l.strip())
+    print(len(articles),len(highlights))
     assert len(articles)==len(highlights)
 
     if(limit==-1):
@@ -189,19 +191,39 @@ def find_length_control_bins(train_summary):
         bin_l.append(all_lengths[int(i*N/10)])
     return bin_l
 
-
+def add_style_term(articles):
+    out = []
+    ct = 0
+    for article in articles:
+        if '(CNN)' in article:
+            out.append('<style_cnn> '+article)
+            ct += 1
+        else:
+            out.append('<style_dailymail> '+article)
+    print(f'Num CNN:{ct}')
+    return out
 
 
 def main():
-    FINETUNE_LENGTH = False
+    FINETUNE_MODE = 'style'
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #DATA_PATH = "/content/drive/My Drive/CNN_DailyMail_Processed"
     #DATA_PATH = "/Users/apple/Downloads/CNN_DailyMail_Processed"
-    DATA_PATH = "/home/aakash03/CNN_DailyMail_Processed"
+    if FINETUNE_MODE in ['entity', 'length_entity']:
+        DATA_PATH = "/home/aakash03/entity_preprocess"
+        train_articles, train_hightlights = read_data(DATA_PATH, 'anon_train', -1) ####
+        val_articles, val_hightlights = read_data(DATA_PATH, 'anon_test', 20)
+        test_articles, test_hightlights = read_data(DATA_PATH, 'anon_test', 20)
+    else:
+        DATA_PATH = "/home/aakash03/CNN_DailyMail_Processed"
 
-    train_articles, train_hightlights = read_data(DATA_PATH, 'train', -1) ####
-    val_articles, val_hightlights = read_data(DATA_PATH, 'val', 20)
-    test_articles, test_hightlights = read_data(DATA_PATH, 'test', 20)
+        train_articles, train_hightlights = read_data(DATA_PATH, 'train', -1) ####
+        val_articles, val_hightlights = read_data(DATA_PATH, 'val', 20)
+        test_articles, test_hightlights = read_data(DATA_PATH, 'test', 20)
+    if FINETUNE_MODE in ['style', 'length_style']:
+        train_articles = add_style_term(train_articles)
+        val_articles = add_style_term(val_articles)
+        test_articles = add_style_term(test_articles)
 
     ####MODEL_NAME = 'sshleifer/distilbart-cnn-6-6' ####
     MODEL_NAME = 'facebook/bart-base'
@@ -209,16 +231,26 @@ def main():
     MAX_EPOCHS = 500
     tokenizer = BartTokenizer.from_pretrained(MODEL_NAME)
     checkpoint_dir = None
-    if FINETUNE_LENGTH:
-        checkpoint_dir = 'checkpoint_dir'
-        length_tokens = [f'<bin_{idx}>' for idx in range(10)]
-        tokenizer.add_tokens(length_tokens)
+    if FINETUNE_MODE!='normal':
+        checkpoint_dir = 'checkpoint_dir_'+FINETUNE_MODE
+        if FINETUNE_MODE in ['length', 'length_entity', 'length_style']:
+            length_tokens = [f'<bin_{idx}>' for idx in range(10)]
+            tokenizer.add_tokens(length_tokens)
+        if FINETUNE_MODE in ['entity', 'length_entity']:
+            entity_tokens = [f'@entity{idx}' for idx in range(10)]
+            tokenizer.add_tokens(entity_tokens)
+        if FINETUNE_MODE in ['style', 'length_style']:
+            style_tokens = ['<style_cnn>', '<style_dailymail>']
+            tokenizer.add_tokens(style_tokens)
 
         ####bin_l = find_length_control_bins(train_hightlights)
-        bin_l = [0, 33, 38, 42, 47, 51, 56, 61, 68, 81]
-        train_length_token_list = find_length_tokens(train_hightlights, bin_l, tokenizer)
-        val_length_token_list = find_length_tokens(val_hightlights, bin_l, tokenizer)
-        test_length_token_list = find_length_tokens(test_hightlights, bin_l, tokenizer)
+        if FINETUNE_MODE in ['length', 'length_entity', 'length_style']:
+            bin_l = [0, 33, 38, 42, 47, 51, 56, 61, 68, 81]
+            train_length_token_list = find_length_tokens(train_hightlights, bin_l, tokenizer)
+            val_length_token_list = find_length_tokens(val_hightlights, bin_l, tokenizer)
+            test_length_token_list = find_length_tokens(test_hightlights, bin_l, tokenizer)
+        else:
+            train_length_token_list, val_length_token_list, test_length_token_list = None, None, None
 
 
         train_ds = TorchDataset(train_articles, train_hightlights, tokenizer, train_length_token_list)
