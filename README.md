@@ -73,9 +73,14 @@ Note: We perform gradient accumulation during training with `accumulate_grad_bat
 
 We trained our models using [Google Cloud Platform (GCP) Deep Learning VM](https://cloud.google.com/deep-learning-vm) which comes in with several predefined libraries and CUDA support. We used GCP instances with 30GB RAM, 8 CPU machines and 1 Tesla K80 GPU for training TailorBART models.
 
+
 ### Evaluation
 
-We primarily used 
+We primarily used Google Colab for evaluations. We developed the following Colab Notebook for multi-purpose automatic evaluation of our model: [Colab Notebook Link](https://colab.research.google.com/drive/1_Tmun1riytAdxsJ03x1UqT9GoaNIDN1-?usp=sharing). Similar to the training code, the evaluation script is generic and can be used for all control types. Set the runtime type in Colab to GPU for faster execution. Also, you are required to upload the datasets to google drive for access.` compute_rouge.py` is a helper util for accurate evaluation of ROUGE scores.
+
+### Demo
+
+**Arvind to write demo description and use**
 
 
 
