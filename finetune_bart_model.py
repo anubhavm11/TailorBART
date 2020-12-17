@@ -28,7 +28,6 @@ class BARTSummarization(LightningModule):
         self.model = BartForConditionalGeneration.from_pretrained(model_name)
         self.tokenizer = tokenizer
         self.model.resize_token_embeddings(len(self.tokenizer))
-        #### Check this
         self.decoder_start_token_id = None
         self.eval_beams = eval_beams
         self.learning_rate = learning_rate
@@ -134,7 +133,7 @@ class TorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         x = self.tokenizer.encode_plus(self.x[index].lower(), max_length=self.max_length-1, return_tensors="pt", truncation=True, padding='max_length')
-        #print(x['input_ids'].view(-1)[:5])
+        
         if self.length_tokens==None:
             x_input_ids = x['input_ids'].view(-1)
             x_attention_mask = x['attention_mask'].view(-1)
