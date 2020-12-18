@@ -49,7 +49,7 @@ We use the CNN-DailyMail dataset for our experiments. We have extracted the data
 
 We used google colab to preprocess and find out the length entity bins. We chose the length bins such that each of the bins contain roughly same number of training data - [Preprocessing Colab Notebook](https://colab.research.google.com/drive/1Wj-w2kbqNe2E9GA9SV1pbxOBO4LbzmK1?usp=sharing)
 
-**Arvind to add entity preprocessing description and code**
+For entity control, we found the entities belonging to important classes such as PERSON, ORG and GEO using Spacy's named entity recognition and filtered it to the top ten most frequent entities for each article. We anonymized the entities in both articles and their corresponding groundtruth summaries with special tokens using regex. Check [here](https://github.com/anubhavm11/Controlled-Summarization-BART/blob/main/entity.py) for implementation details.
 
 For source-style control, we needed to find out the ground truth source of the article - whether the ariticle and its corresponding highlight belong to *CNN* or *DailyMail* source. To find this, we perform a string search for `(CNN)` token in the input article. Articles containing this token are classified belonging to CNN source and rest of them belong to DailyMail. We observed that the dataset contained 90k CNN source articles and remaining 180k belong to DailyMail. Check [here](https://github.com/anubhavm11/Controlled-Summarization-BART/blob/main/finetune_bart_model.py#L193) for implementation details.
 
@@ -79,8 +79,7 @@ We trained our models using [Google Cloud Platform (GCP) Deep Learning VM](https
 We primarily used Google Colab for evaluations. We developed the following Colab Notebook for multi-purpose automatic evaluation of our model: [Colab Notebook Link](https://colab.research.google.com/drive/1_Tmun1riytAdxsJ03x1UqT9GoaNIDN1-?usp=sharing). Similar to the training code, the evaluation script is generic and can be used for all control types. Set the runtime type in Colab to GPU for faster execution. Also, you are required to upload the datasets to google drive for access.` compute_rouge.py` is a helper util for accurate evaluation of ROUGE scores.
 
 ### Demo
-
-**Arvind to write demo description and use**
+We used [Streamlit](https://www.streamlit.io/) in Python for creating an interative web interface with our trained models at the backend to generate output summary based on the user's preferences. We presented the navigation to different summary controls using a single choice radio group. For selecting the entities, we displayed a dropdown menu with top ten most frequent entities in the article. The output summary section highlights the entities requested and also mentions the summary length information.
 
 
 
